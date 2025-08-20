@@ -1,0 +1,146 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Stamping Notifications</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            body { font-family: 'Inter', sans-serif; background-color: transparent; }
+            .notification-container {
+                position: fixed;
+                bottom: 1rem;
+                right: 1rem;
+                width: 300px;
+                z-index: 100;
+            }
+            .notification {
+                animation: fadeInOut 5s forwards;
+            }
+            @keyframes fadeInOut {
+                0% { opacity: 0; transform: translateY(20px); }
+                10% { opacity: 1; transform: translateY(0); }
+                90% { opacity: 1; transform: translateY(0); }
+                100% { opacity: 0; transform: translateY(20px); }
+            }
+            .sparkle {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 2.5rem;
+                animation: sparkleEffect 1s forwards;
+            }
+            @keyframes sparkleEffect {
+                0% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+                50% { opacity: 1; transform: scale(1.5) rotate(45deg); }
+                100% { opacity: 0; transform: scale(2) rotate(90deg); }
+            }
+        </style>
+    </head>
+    <body class="bg-transparent overflow-hidden">
+    
+        <div id="notification-container" class="notification-container"></div>
+    
+        <script>
+            // Replace with your Google Sheet ID for the Friendship Tracker
+            const SHEET_ID = '1TwKoCPQuzcxN0DMhi9eC9aG9EOV8JtYWZnbFqT-FRkc/edit?gid=1168251095#gid=1168251095';
+            // Polling interval in milliseconds (e.g., check every 5 seconds)
+            const POLLING_INTERVAL = 5000;
+            
+            let lastLogCount = 0;
+    
+            /**
+             * Fetches the current log count and the name of the last person logged.
+             */
+            async function fetchLogData() {
+                // The URL to get all data from the "Attendance Log" sheet
+                const logUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Attendance%20Log`;
+                try {
+                    const response = await fetch(logUrl);
+                    const text = await response.text();
+                    console.log('Raw response text:', text); // Log the raw response for debugging
+                    const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                    const data = JSON.parse(jsonText);
+    
+                    // Get the total number of logs
+                    const logCount = data.table.rows.length;
+                    
+                    // Get the name of the last person logged
+                    let lastLoggedName = null;
+                    if (logCount > 0) {
+                        const lastRow = data.table.rows[logCount - 1];
+                        lastLoggedName = lastRow.c[1].v; // Column 2 (index 1) is "Friend's Name"
+                    }
+                    
+                    return { logCount, lastLoggedName };
+                } catch (error) {
+                    console.error('Error fetching log data:', error);
+                    return null;
+                }
+            }
+    
+            /**
+             * Creates and displays a new notification.
+             * @param {string} name The name of the friend to display.
+             */
+            function showNotification(name) {
+                const container = document.getElementById('notification-container');
+    
+                // Create the notification element
+                const notificationDiv = document.createElement('div');
+                notificationDiv.className = 'notification bg-white rounded-xl shadow-lg p-4 mb-4 relative';
+                
+                // Add a little sparkle emoji
+                const sparkle = document.createElement('span');
+                sparkle.className = 'sparkle text-yellow-400';
+                sparkle.textContent = '✨';
+    
+                // Add the notification message
+                const message = document.createElement('p');
+                message.className = 'text-center font-bold text-gray-800';
+                message.textContent = `${name} got a new stamp!`;
+    
+                notificationDiv.appendChild(sparkle);
+                notificationDiv.appendChild(message);
+                container.appendChild(notificationDiv);
+    
+                // Remove the notification after the animation ends
+                setTimeout(() => {
+                    notificationDiv.remove();
+                }, 5000); // Matches the animation duration
+            }
+    
+            /**
+             * Checks for new logs by comparing the current count to the last count.
+             */
+            async function checkForNewLogs() {
+                const logData = await fetchLogData();
+                if (logData) {
+                    // Check if the current log count is greater than the last one
+                    if (logData.logCount > lastLogCount) {
+                        console.log('New log detected!');
+                        // Trigger a notification for the last person logged
+                        if (logData.lastLoggedName) {
+                            showNotification(logData.lastLoggedName);
+                        }
+                    }
+                    // Update the last log count for the next check
+                    lastLogCount = logData.logCount;
+                }
+            }
+            
+            // Initial fetch to get the starting count and prevent a notification on page load
+            window.onload = async function() {
+                const initialLogData = await fetchLogData();
+                if (initialLogData) {
+                    lastLogCount = initialLogData.logCount;
+                }
+                
+                // Start polling for new logs
+                setInterval(checkForNewLogs, POLLING_INTERVAL);
+            };
+        </script>
+    </body>
+    </html>
+    
