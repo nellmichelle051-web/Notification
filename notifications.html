@@ -40,15 +40,18 @@
     </head>
     <body class="bg-transparent overflow-hidden">
     
+        <div id="status-message" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-red-100 text-red-800 p-4 rounded-lg shadow-md hidden z-50"></div>
+    
         <div id="notification-container" class="notification-container"></div>
     
         <script>
             // Replace with your Google Sheet ID for the Friendship Tracker
-            const SHEET_ID = '1TwKoCPQuzcxN0DMhi9eC9aG9EOV8JtYWZnbFqT-FRkc/edit?gid=1168251095#gid=1168251095';
+            const SHEET_ID = '1TwKoCPQuzcxN0DMhi9eC9aG9EOV8JtYWZnbFqT-FRkc/edit?gid=0#gid=0';
             // Polling interval in milliseconds (e.g., check every 5 seconds)
             const POLLING_INTERVAL = 5000;
             
             let lastLogCount = 0;
+            let statusMessageDiv = document.getElementById('status-message');
     
             /**
              * Fetches the current log count and the name of the last person logged.
@@ -58,8 +61,12 @@
                 const logUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Attendance%20Log`;
                 try {
                     const response = await fetch(logUrl);
+                    if (!response.ok) {
+                         throw new Error(`HTTP error! status: ${response.status}`);
+                    }
                     const text = await response.text();
-                    console.log('Raw response text:', text); // Log the raw response for debugging
+                    
+                    // The raw text starts with "/*O_o*/\n" which needs to be removed
                     const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
                     const data = JSON.parse(jsonText);
     
@@ -75,6 +82,7 @@
                     
                     return { logCount, lastLoggedName };
                 } catch (error) {
+                    displayMessage(`Error: Could not load data. Make sure your Google Sheet is publicly shared.`, 'error');
                     console.error('Error fetching log data:', error);
                     return null;
                 }
@@ -86,7 +94,8 @@
              */
             function showNotification(name) {
                 const container = document.getElementById('notification-container');
-    
+                displayMessage('New stamp logged!', 'success');
+                
                 // Create the notification element
                 const notificationDiv = document.createElement('div');
                 notificationDiv.className = 'notification bg-white rounded-xl shadow-lg p-4 mb-4 relative';
@@ -110,6 +119,21 @@
                     notificationDiv.remove();
                 }, 5000); // Matches the animation duration
             }
+            
+            /**
+             * Displays a status message on the page.
+             * @param {string} message The message to display.
+             * @param {string} type 'success' or 'error'
+             */
+            function displayMessage(message, type) {
+                statusMessageDiv.textContent = message;
+                statusMessageDiv.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+                if (type === 'error') {
+                    statusMessageDiv.classList.add('bg-red-100', 'text-red-800');
+                } else {
+                    statusMessageDiv.classList.add('bg-green-100', 'text-green-800');
+                }
+            }
     
             /**
              * Checks for new logs by comparing the current count to the last count.
@@ -117,8 +141,11 @@
             async function checkForNewLogs() {
                 const logData = await fetchLogData();
                 if (logData) {
+                    // Hide any previous error messages
+                    statusMessageDiv.classList.add('hidden');
+    
                     // Check if the current log count is greater than the last one
-                    if (logData.logCount > lastLogCount) {
+                    if (logData.logCount > lastLogCount && lastLogCount > 0) {
                         console.log('New log detected!');
                         // Trigger a notification for the last person logged
                         if (logData.lastLoggedName) {
@@ -135,6 +162,7 @@
                 const initialLogData = await fetchLogData();
                 if (initialLogData) {
                     lastLogCount = initialLogData.logCount;
+                    displayMessage('Successfully connected to Google Sheet.', 'success');
                 }
                 
                 // Start polling for new logs
